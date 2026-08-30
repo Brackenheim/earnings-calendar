@@ -5,6 +5,12 @@ import urllib.request
 import urllib.error
 from datetime import date, timedelta
 
+
+# ============================================================
+# TICKERS
+# To add another stock later, add one entry here.
+# ============================================================
+
 TICKERS = {
     "PLTR": {
         "name": "Palantir Technologies",
@@ -32,6 +38,11 @@ TICKERS = {
     },
 }
 
+
+# ============================================================
+# FINNHUB
+# ============================================================
+
 API_KEY = os.environ["FINNHUB_API_KEY"]
 
 today = date.today()
@@ -39,8 +50,13 @@ end_date = today + timedelta(days=365)
 
 events = []
 
-# Get earnings separately for each ticker
+
+# ============================================================
+# GET EARNINGS FOR EACH TICKER
+# ============================================================
+
 for ticker, info in TICKERS.items():
+
     finnhub_symbol = info["finnhub_symbol"]
 
     params = urllib.parse.urlencode({
@@ -58,25 +74,28 @@ for ticker, info in TICKERS.items():
 
         ticker_events = data.get("earningsCalendar", [])
 
-        if ticker == "NVO":
-            print("NVO Finnhub response:", json.dumps(data, indent=2))
-
         print(f"{ticker}: {len(ticker_events)} events found")
 
         for event in ticker_events:
+
             if event.get("symbol") == finnhub_symbol:
                 event["calendar_ticker"] = ticker
                 events.append(event)
 
-except urllib.error.HTTPError as e:
-    print(f"{ticker}: Finnhub HTTP error {e.code}")
-    print(f"{ticker}: {e.read().decode()}")
+    except urllib.error.HTTPError as e:
+        print(f"{ticker}: Finnhub HTTP error {e.code}")
+        print(f"{ticker}: {e.read().decode()}")
 
-except Exception as e:
-    print(f"{ticker}: unexpected error: {e}")
+    except Exception as e:
+        print(f"{ticker}: unexpected error: {e}")
+
 
 print(f"Total target events: {len(events)}")
 
+
+# ============================================================
+# ICS TEXT ESCAPING
+# ============================================================
 
 def escape(text):
     return (
@@ -88,6 +107,10 @@ def escape(text):
     )
 
 
+# ============================================================
+# BUILD ICS CALENDAR
+# ============================================================
+
 ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -98,7 +121,8 @@ ics = [
 
 
 for event in events:
-    ticker = event.get("calendar_ticker", event.get("symbol"))
+
+    ticker = event.get("calendar_ticker")
 
     if ticker not in TICKERS:
         continue
@@ -153,6 +177,10 @@ for event in events:
         "END:VEVENT",
     ])
 
+
+# ============================================================
+# WRITE earnings.ics
+# ============================================================
 
 ics.append("END:VCALENDAR")
 
