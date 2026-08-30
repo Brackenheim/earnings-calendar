@@ -100,9 +100,9 @@ for event in events:
     summary = f"{ticker} Q{quarter} {year} Earnings"
 
     description = (
-        f"{company}\\n"
-        f"Ticker: {ticker}\\n"
-        f"Timing: {timing}\\n"
+        f"{company}\n"
+        f"Ticker: {ticker}\n"
+        f"Timing: {timing}\n"
         f"Source: Finnhub"
     )
 
