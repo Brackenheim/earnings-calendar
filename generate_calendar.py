@@ -6,12 +6,30 @@ import urllib.error
 from datetime import date, timedelta
 
 TICKERS = {
-    "PLTR": "Palantir Technologies",
-    "CHWY": "Chewy",
-    "RGTI": "Rigetti Computing",
-    "CCL": "Carnival Corporation",
-    "APO": "Apollo Global Management",
-    "NVO": "Novo Nordisk",
+    "PLTR": {
+        "name": "Palantir Technologies",
+        "finnhub_symbol": "PLTR",
+    },
+    "CHWY": {
+        "name": "Chewy",
+        "finnhub_symbol": "CHWY",
+    },
+    "RGTI": {
+        "name": "Rigetti Computing",
+        "finnhub_symbol": "RGTI",
+    },
+    "CCL": {
+        "name": "Carnival Corporation",
+        "finnhub_symbol": "CCL",
+    },
+    "APO": {
+        "name": "Apollo Global Management",
+        "finnhub_symbol": "APO",
+    },
+    "NVO": {
+        "name": "Novo Nordisk",
+        "finnhub_symbol": "NOVO B.CO",
+    },
 }
 
 API_KEY = os.environ["FINNHUB_API_KEY"]
