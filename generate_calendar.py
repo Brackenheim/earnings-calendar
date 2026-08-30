@@ -38,6 +38,9 @@ for ticker in TICKERS:
 
         ticker_events = data.get("earningsCalendar", [])
 
+        if ticker == "NVO":
+            print("NVO Finnhub response:", json.dumps(data, indent=2))
+
         print(f"{ticker}: {len(ticker_events)} events found")
 
         for event in ticker_events:
