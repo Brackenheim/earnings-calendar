@@ -2,6 +2,7 @@ import json
 import os
 import urllib.parse
 import urllib.request
+import urllib.error
 from datetime import date, timedelta
 
 TICKERS = {
@@ -27,8 +28,13 @@ params = urllib.parse.urlencode({
 
 url = "https://finnhub.io/api/v1/calendar/earnings?" + params
 
-with urllib.request.urlopen(url) as response:
-    data = json.load(response)
+try:
+    with urllib.request.urlopen(url) as response:
+        data = json.load(response)
+except urllib.error.HTTPError as e:
+    print("Finnhub HTTP error:", e.code)
+    print("Finnhub response:", e.read().decode())
+    raise
 
 events = data.get("earningsCalendar", [])
 
