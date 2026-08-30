@@ -37,6 +37,9 @@ except urllib.error.HTTPError as e:
 
 events = data.get("earningsCalendar", [])
 
+print("Number of Finnhub events:", len(events))
+print("Symbols returned:", sorted(set(e.get("symbol") for e in events)))
+
 def escape(text):
     return str(text).replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", "\\n")
 
