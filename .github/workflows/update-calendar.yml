@@ -44,7 +44,7 @@ jobs:
         run: python generate_calendar.py
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Prepare Pages artifact
         run: |
