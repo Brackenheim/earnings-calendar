@@ -39,10 +39,6 @@ TICKERS = {
 }
 
 
-# ============================================================
-# FINNHUB
-# ============================================================
-
 API_KEY = os.environ["FINNHUB_API_KEY"]
 
 today = date.today()
@@ -52,10 +48,14 @@ events = []
 
 
 # ============================================================
-# GET EARNINGS FOR EACH TICKER
+# GET EARNINGS FOR US STOCKS
 # ============================================================
 
 for ticker, info in TICKERS.items():
+
+    # NVO is handled separately below
+    if ticker == "NVO":
+        continue
 
     finnhub_symbol = info["finnhub_symbol"]
 
@@ -77,7 +77,6 @@ for ticker, info in TICKERS.items():
         print(f"{ticker}: {len(ticker_events)} events found")
 
         for event in ticker_events:
-
             if event.get("symbol") == finnhub_symbol:
                 event["calendar_ticker"] = ticker
                 events.append(event)
@@ -88,6 +87,46 @@ for ticker, info in TICKERS.items():
 
     except Exception as e:
         print(f"{ticker}: unexpected error: {e}")
+
+
+# ============================================================
+# GET NVO FROM THE BROAD FINNHUB EARNINGS CALENDAR
+# Direct query for NOVO B.CO returns HTTP 403, so we retrieve
+# the broad calendar and filter for NOVO B.CO.
+# ============================================================
+
+nvo_params = urllib.parse.urlencode({
+    "from": today.isoformat(),
+    "to": end_date.isoformat(),
+    "token": API_KEY,
+})
+
+nvo_url = "https://finnhub.io/api/v1/calendar/earnings?" + nvo_params
+
+try:
+    with urllib.request.urlopen(nvo_url) as response:
+        nvo_data = json.load(response)
+
+    all_events = nvo_data.get("earningsCalendar", [])
+
+    nvo_events = [
+        event
+        for event in all_events
+        if event.get("symbol") == "NOVO B.CO"
+    ]
+
+    print(f"NVO: {len(nvo_events)} events found via broad calendar")
+
+    for event in nvo_events:
+        event["calendar_ticker"] = "NVO"
+        events.append(event)
+
+except urllib.error.HTTPError as e:
+    print(f"NVO broad calendar: Finnhub HTTP error {e.code}")
+    print(f"NVO broad calendar: {e.read().decode()}")
+
+except Exception as e:
+    print(f"NVO broad calendar: unexpected error: {e}")
 
 
 print(f"Total target events: {len(events)}")
