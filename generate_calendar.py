@@ -40,11 +40,13 @@ end_date = today + timedelta(days=365)
 events = []
 
 # Get earnings separately for each ticker
-for ticker in TICKERS:
+for ticker, info in TICKERS.items():
+    finnhub_symbol = info["finnhub_symbol"]
+
     params = urllib.parse.urlencode({
         "from": today.isoformat(),
         "to": end_date.isoformat(),
-        "symbol": ticker,
+        "symbol": finnhub_symbol,
         "token": API_KEY,
     })
 
@@ -61,9 +63,10 @@ for ticker in TICKERS:
 
         print(f"{ticker}: {len(ticker_events)} events found")
 
-        for event in ticker_events:
-            if event.get("symbol") == ticker:
-                events.append(event)
+for event in ticker_events:
+    if event.get("symbol") == finnhub_symbol:
+        event["calendar_ticker"] = ticker
+        events.append(event)
 
     except urllib.error.HTTPError as e:
         print(f"{ticker}: Finnhub HTTP error {e.code}")
