@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import os
 import urllib.parse
@@ -42,7 +44,8 @@ TICKERS = {
 }
 
 
-API_KEY = os.environ["FINNHUB_API_KEY"]
+FINNHUB_API_KEY = os.environ["FINNHUB_API_KEY"]
+ALPHA_VANTAGE_API_KEY = os.environ["ALPHA_VANTAGE_API_KEY"]
 
 today = date.today()
 end_date = today + timedelta(days=365)
@@ -50,24 +53,25 @@ end_date = today + timedelta(days=365)
 events = []
 
 
-# ============================================================
-# GET EARNINGS SEPARATELY FOR EACH TICKER
-# ============================================================
+def get_finnhub_events(ticker, symbols):
+    """
+    Try each Finnhub symbol until one returns earnings events.
+    Returns a list of events, or an empty list.
+    """
 
-for ticker, info in TICKERS.items():
-
-    ticker_events_found = False
-
-    for finnhub_symbol in info["finnhub_symbols"]:
+    for finnhub_symbol in symbols:
 
         params = urllib.parse.urlencode({
             "from": today.isoformat(),
             "to": end_date.isoformat(),
             "symbol": finnhub_symbol,
-            "token": API_KEY,
+            "token": FINNHUB_API_KEY,
         })
 
-        url = "https://finnhub.io/api/v1/calendar/earnings?" + params
+        url = (
+            "https://finnhub.io/api/v1/calendar/earnings?"
+            + params
+        )
 
         try:
             with urllib.request.urlopen(url) as response:
@@ -80,13 +84,11 @@ for ticker, info in TICKERS.items():
                 f"{len(ticker_events)} events found"
             )
 
-            for event in ticker_events:
-                event["calendar_ticker"] = ticker
-                events.append(event)
-                ticker_events_found = True
+            if ticker_events:
+                for event in ticker_events:
+                    event["calendar_ticker"] = ticker
 
-            if ticker_events_found:
-                break
+                return ticker_events
 
         except urllib.error.HTTPError as e:
 
@@ -101,8 +103,6 @@ for ticker, info in TICKERS.items():
             except Exception:
                 pass
 
-            continue
-
         except Exception as e:
 
             print(
@@ -110,76 +110,158 @@ for ticker, info in TICKERS.items():
                 f"unexpected error: {e}"
             )
 
-            continue
+    return []
 
-    # ========================================================
-    # IF FINNHUB RETURNED NOTHING, CHECK BROAD CALENDAR
-    # ========================================================
 
-    if not ticker_events_found:
+def get_alpha_vantage_event(ticker):
+    """
+    Fallback to Alpha Vantage if Finnhub has no earnings events.
 
-        print(
-            f"{ticker}: no events from ticker-specific request. "
-            f"Checking broad Finnhub calendar..."
+    Alpha Vantage's Earnings Calendar endpoint returns CSV data.
+    We use the first upcoming report date for the requested ticker.
+    """
+
+    print(f"{ticker}: checking Alpha Vantage fallback...")
+
+    params = urllib.parse.urlencode({
+        "function": "EARNINGS_CALENDAR",
+        "symbol": ticker,
+        "horizon": "12month",
+        "apikey": ALPHA_VANTAGE_API_KEY,
+    })
+
+    url = (
+        "https://www.alphavantage.co/query?"
+        + params
+    )
+
+    try:
+        with urllib.request.urlopen(url) as response:
+            raw_data = response.read().decode("utf-8")
+
+        # Alpha Vantage can return an informational/error message
+        # instead of CSV, so check that first.
+        if (
+            raw_data.startswith("{")
+            or "Thank you for using Alpha Vantage" in raw_data
+            or "Error Message" in raw_data
+        ):
+            print(f"{ticker}: Alpha Vantage returned:")
+            print(raw_data[:500])
+            return None
+
+        reader = csv.DictReader(io.StringIO(raw_data))
+
+        rows = list(reader)
+
+        # Keep only rows with a valid future report date.
+        valid_rows = []
+
+        for row in rows:
+            report_date = row.get("reportDate", "").strip()
+
+            if not report_date:
+                continue
+
+            try:
+                parsed_date = date.fromisoformat(report_date)
+            except ValueError:
+                continue
+
+            if parsed_date >= today:
+                valid_rows.append(row)
+
+        if not valid_rows:
+            print(f"{ticker}: Alpha Vantage: no future earnings found")
+            return None
+
+        # Sort chronologically and use the earliest upcoming event.
+        valid_rows.sort(
+            key=lambda row: row["reportDate"]
         )
 
-        broad_params = urllib.parse.urlencode({
-            "from": today.isoformat(),
-            "to": end_date.isoformat(),
-            "token": API_KEY,
-        })
+        row = valid_rows[0]
 
-        broad_url = (
-            "https://finnhub.io/api/v1/calendar/earnings?"
-            + broad_params
+        earnings_date = row["reportDate"]
+
+        event = {
+            "calendar_ticker": ticker,
+            "symbol": ticker,
+            "date": earnings_date,
+            "quarter": "",
+            "year": earnings_date[:4],
+            "hour": "",
+            "source": "Alpha Vantage fallback",
+        }
+
+        print(
+            f"{ticker}: Alpha Vantage fallback found "
+            f"{earnings_date}"
+        )
+
+        return event
+
+    except urllib.error.HTTPError as e:
+
+        print(
+            f"{ticker}: Alpha Vantage HTTP error {e.code}"
         )
 
         try:
-            with urllib.request.urlopen(broad_url) as response:
-                broad_data = json.load(response)
+            print(e.read().decode())
+        except Exception:
+            pass
 
-            broad_events = broad_data.get("earningsCalendar", [])
+        return None
 
-            matching_events = [
-                event
-                for event in broad_events
-                if event.get("symbol") in info["finnhub_symbols"]
-            ]
+    except Exception as e:
 
-            print(
-                f"{ticker}: {len(matching_events)} events "
-                f"found in broad calendar"
-            )
+        print(
+            f"{ticker}: Alpha Vantage unexpected error: {e}"
+        )
 
-            for event in matching_events:
-                event["calendar_ticker"] = ticker
-                events.append(event)
-                ticker_events_found = True
+        return None
 
-        except urllib.error.HTTPError as e:
 
-            print(
-                f"{ticker}: broad calendar HTTP error {e.code}"
-            )
+# ============================================================
+# GET EARNINGS
+# ============================================================
 
-        except Exception as e:
+for ticker, info in TICKERS.items():
 
-            print(
-                f"{ticker}: broad calendar unexpected error: {e}"
-            )
+    ticker_events = get_finnhub_events(
+        ticker,
+        info["finnhub_symbols"],
+    )
 
-    if not ticker_events_found:
-        print(f"{ticker}: NO earnings events found")
+    if ticker_events:
+
+        events.extend(ticker_events)
+
+    else:
+
+        print(
+            f"{ticker}: no events from Finnhub. "
+            f"Using fallback."
+        )
+
+        fallback_event = get_alpha_vantage_event(ticker)
+
+        if fallback_event:
+            events.append(fallback_event)
 
 
 print(f"Total target events: {len(events)}")
 
 
 # ============================================================
-# ICS ESCAPING
+# ICS HELPERS
 # ============================================================
 
 def escape(text):
+    """
+    Escape text according to ICS formatting rules.
+    """
     return (
         str(text)
         .replace("\\", "\\\\")
@@ -189,10 +271,6 @@ def escape(text):
     )
 
 
-# ============================================================
-# BUILD ICS CALENDAR
-# ============================================================
-
 ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -201,6 +279,10 @@ ics = [
     "X-WR-CALNAME:Stock Earnings",
 ]
 
+
+# ============================================================
+# CREATE CALENDAR EVENTS
+# ============================================================
 
 for event in events:
 
@@ -220,6 +302,11 @@ for event in events:
     year = event.get("year", "")
     hour = event.get("hour", "")
 
+    if quarter:
+        quarter_label = f"Q{quarter}"
+    else:
+        quarter_label = "Earnings"
+
     timing = {
         "bmo": "Before market open",
         "amc": "After market close",
@@ -227,17 +314,29 @@ for event in events:
     }.get(hour, "Time not specified")
 
     uid = (
-        f"{ticker}-{year}-Q{quarter}"
+        f"{ticker}-{earnings_date}"
         "@personal-earnings-calendar"
     )
 
-    summary = f"{ticker} Q{quarter} {year} Earnings"
+    if quarter and year:
+        summary = (
+            f"{ticker} Q{quarter} {year} Earnings"
+        )
+    else:
+        summary = (
+            f"{ticker} Earnings"
+        )
+
+    source = event.get(
+        "source",
+        "Finnhub"
+    )
 
     description = (
         f"{company}\n"
         f"Ticker: {ticker}\n"
         f"Timing: {timing}\n"
-        f"Source: Finnhub"
+        f"Source: {source}"
     )
 
     end_earnings_date = (
@@ -249,7 +348,10 @@ for event in events:
         "BEGIN:VEVENT",
         f"UID:{uid}",
         f"DTSTART;VALUE=DATE:{earnings_date.replace('-', '')}",
-        f"DTEND;VALUE=DATE:{end_earnings_date.strftime('%Y%m%d')}",
+        (
+            "DTEND;VALUE=DATE:"
+            f"{end_earnings_date.strftime('%Y%m%d')}"
+        ),
         f"SUMMARY:{escape(summary)}",
         f"DESCRIPTION:{escape(description)}",
 
@@ -273,11 +375,18 @@ ics.append("END:VCALENDAR")
 
 
 # ============================================================
-# WRITE earnings.ics
+# WRITE ICS FILE
 # ============================================================
 
-with open("earnings.ics", "w", encoding="utf-8") as f:
-    f.write("\r\n".join(ics) + "\r\n")
+with open(
+    "earnings.ics",
+    "w",
+    encoding="utf-8"
+) as f:
+    f.write(
+        "\r\n".join(ics)
+        + "\r\n"
+    )
 
 
 print("Calendar generated successfully.")
