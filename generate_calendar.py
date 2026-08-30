@@ -98,7 +98,7 @@ ics = [
 
 
 for event in events:
-    ticker = event.get("symbol")
+    ticker = event.get("calendar_ticker", event.get("symbol"))
 
     if ticker not in TICKERS:
         continue
@@ -108,7 +108,7 @@ for event in events:
     if not earnings_date:
         continue
 
-    company = TICKERS[ticker]
+    company = TICKERS[ticker]["name"]
     quarter = event.get("quarter", "")
     year = event.get("year", "")
     hour = event.get("hour", "")
