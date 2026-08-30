@@ -59,3 +59,8 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Show earnings calendar URL
+        run: |
+          echo "Earnings calendar:"
+          echo "${{ steps.deployment.outputs.page_url }}earnings.ics"
