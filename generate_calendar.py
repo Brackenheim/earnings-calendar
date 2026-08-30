@@ -63,17 +63,17 @@ for ticker, info in TICKERS.items():
 
         print(f"{ticker}: {len(ticker_events)} events found")
 
-for event in ticker_events:
-    if event.get("symbol") == finnhub_symbol:
-        event["calendar_ticker"] = ticker
-        events.append(event)
+    for event in ticker_events:
+        if event.get("symbol") == finnhub_symbol:
+            event["calendar_ticker"] = ticker
+            events.append(event)
 
-    except urllib.error.HTTPError as e:
-        print(f"{ticker}: Finnhub HTTP error {e.code}")
-        print(f"{ticker}: {e.read().decode()}")
+except urllib.error.HTTPError as e:
+    print(f"{ticker}: Finnhub HTTP error {e.code}")
+    print(f"{ticker}: {e.read().decode()}")
 
-    except Exception as e:
-        print(f"{ticker}: unexpected error: {e}")
+except Exception as e:
+    print(f"{ticker}: unexpected error: {e}")
 
 print(f"Total target events: {len(events)}")
 
