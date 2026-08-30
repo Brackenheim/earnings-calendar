@@ -70,13 +70,9 @@ for ticker, info in TICKERS.items():
             )
 
             for event in ticker_events:
-
-                returned_symbol = event.get("symbol")
-
-                if returned_symbol == finnhub_symbol:
-                    event["calendar_ticker"] = ticker
-                    events.append(event)
-                    ticker_events_found = True
+                event["calendar_ticker"] = ticker
+                events.append(event)
+                ticker_events_found = True
 
             # If this symbol worked, do not need to try another symbol
             if ticker_events_found:
