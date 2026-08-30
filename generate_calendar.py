@@ -22,7 +22,6 @@ end_date = today + timedelta(days=365)
 params = urllib.parse.urlencode({
     "from": today.isoformat(),
     "to": end_date.isoformat(),
-    "international": "true",
     "token": API_KEY,
 })
 
