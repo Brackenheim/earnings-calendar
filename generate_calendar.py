@@ -27,6 +27,14 @@ TICKERS = {
         "name": "Apollo Global Management",
         "finnhub_symbols": ["APO"],
     },
+    "BMNR": {
+        "name": "Bitmine Immersion Technologies",
+        "finnhub_symbols": ["BMNR"],
+    },
+    "INTU": {
+        "name": "Intuit Inc",
+        "finnhub_symbols": ["INTU"],
+    },
     "NVO": {
         "name": "Novo Nordisk",
         "finnhub_symbols": ["NVO", "NOVO B.CO"],
