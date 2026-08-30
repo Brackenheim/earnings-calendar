@@ -50,7 +50,10 @@ end_date = today + timedelta(days=365)
 events = []
 
 
-# Get earnings separately for each ticker
+# ============================================================
+# GET EARNINGS SEPARATELY FOR EACH TICKER
+# ============================================================
+
 for ticker, info in TICKERS.items():
 
     ticker_events_found = False
@@ -82,7 +85,6 @@ for ticker, info in TICKERS.items():
                 events.append(event)
                 ticker_events_found = True
 
-            # If this symbol worked, do not need to try another symbol
             if ticker_events_found:
                 break
 
@@ -99,7 +101,6 @@ for ticker, info in TICKERS.items():
             except Exception:
                 pass
 
-            # Try the next Finnhub symbol, if one exists
             continue
 
         except Exception as e:
@@ -109,8 +110,63 @@ for ticker, info in TICKERS.items():
                 f"unexpected error: {e}"
             )
 
-            # Try the next Finnhub symbol, if one exists
             continue
+
+    # ========================================================
+    # IF FINNHUB RETURNED NOTHING, CHECK BROAD CALENDAR
+    # ========================================================
+
+    if not ticker_events_found:
+
+        print(
+            f"{ticker}: no events from ticker-specific request. "
+            f"Checking broad Finnhub calendar..."
+        )
+
+        broad_params = urllib.parse.urlencode({
+            "from": today.isoformat(),
+            "to": end_date.isoformat(),
+            "token": API_KEY,
+        })
+
+        broad_url = (
+            "https://finnhub.io/api/v1/calendar/earnings?"
+            + broad_params
+        )
+
+        try:
+            with urllib.request.urlopen(broad_url) as response:
+                broad_data = json.load(response)
+
+            broad_events = broad_data.get("earningsCalendar", [])
+
+            matching_events = [
+                event
+                for event in broad_events
+                if event.get("symbol") in info["finnhub_symbols"]
+            ]
+
+            print(
+                f"{ticker}: {len(matching_events)} events "
+                f"found in broad calendar"
+            )
+
+            for event in matching_events:
+                event["calendar_ticker"] = ticker
+                events.append(event)
+                ticker_events_found = True
+
+        except urllib.error.HTTPError as e:
+
+            print(
+                f"{ticker}: broad calendar HTTP error {e.code}"
+            )
+
+        except Exception as e:
+
+            print(
+                f"{ticker}: broad calendar unexpected error: {e}"
+            )
 
     if not ticker_events_found:
         print(f"{ticker}: NO earnings events found")
@@ -119,10 +175,11 @@ for ticker, info in TICKERS.items():
 print(f"Total target events: {len(events)}")
 
 
+# ============================================================
+# ICS ESCAPING
+# ============================================================
+
 def escape(text):
-    """
-    Escape text according to ICS formatting rules.
-    """
     return (
         str(text)
         .replace("\\", "\\\\")
@@ -131,6 +188,10 @@ def escape(text):
         .replace("\n", "\\n")
     )
 
+
+# ============================================================
+# BUILD ICS CALENDAR
+# ============================================================
 
 ics = [
     "BEGIN:VCALENDAR",
@@ -141,7 +202,6 @@ ics = [
 ]
 
 
-# Create calendar events
 for event in events:
 
     ticker = event.get("calendar_ticker")
@@ -211,6 +271,10 @@ for event in events:
 
 ics.append("END:VCALENDAR")
 
+
+# ============================================================
+# WRITE earnings.ics
+# ============================================================
 
 with open("earnings.ics", "w", encoding="utf-8") as f:
     f.write("\r\n".join(ics) + "\r\n")
