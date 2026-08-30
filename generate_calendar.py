@@ -19,36 +19,50 @@ API_KEY = os.environ["FINNHUB_API_KEY"]
 today = date.today()
 end_date = today + timedelta(days=365)
 
-params = urllib.parse.urlencode({
-    "from": today.isoformat(),
-    "to": end_date.isoformat(),
-    "symbol": "PLTR",
-    "token": API_KEY,
-})
+events = []
 
-url = "https://finnhub.io/api/v1/calendar/earnings?" + params
+# Get earnings separately for each ticker
+for ticker in TICKERS:
+    params = urllib.parse.urlencode({
+        "from": today.isoformat(),
+        "to": end_date.isoformat(),
+        "symbol": ticker,
+        "token": API_KEY,
+    })
 
-try:
-    with urllib.request.urlopen(url) as response:
-        data = json.load(response)
-except urllib.error.HTTPError as e:
-    print("Finnhub HTTP error:", e.code)
-    print("Finnhub response:", e.read().decode())
-    raise
+    url = "https://finnhub.io/api/v1/calendar/earnings?" + params
 
-events = data.get("earningsCalendar", [])
+    try:
+        with urllib.request.urlopen(url) as response:
+            data = json.load(response)
 
-print("Number of Finnhub events:", len(events))
+        ticker_events = data.get("earningsCalendar", [])
 
-target_events = [e for e in events if e.get("symbol") in TICKERS]
+        print(f"{ticker}: {len(ticker_events)} events found")
 
-print("Target events found:", len(target_events))
+        for event in ticker_events:
+            if event.get("symbol") == ticker:
+                events.append(event)
 
-for e in target_events:
-    print("TARGET:", e)
+    except urllib.error.HTTPError as e:
+        print(f"{ticker}: Finnhub HTTP error {e.code}")
+        print(f"{ticker}: {e.read().decode()}")
+
+    except Exception as e:
+        print(f"{ticker}: unexpected error: {e}")
+
+print(f"Total target events: {len(events)}")
+
 
 def escape(text):
-    return str(text).replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", "\\n")
+    return (
+        str(text)
+        .replace("\\", "\\\\")
+        .replace(",", "\\,")
+        .replace(";", "\\;")
+        .replace("\n", "\\n")
+    )
+
 
 ics = [
     "BEGIN:VCALENDAR",
@@ -58,12 +72,15 @@ ics = [
     "X-WR-CALNAME:Stock Earnings",
 ]
 
+
 for event in events:
     ticker = event.get("symbol")
+
     if ticker not in TICKERS:
         continue
 
     earnings_date = event.get("date")
+
     if not earnings_date:
         continue
 
@@ -81,6 +98,7 @@ for event in events:
     uid = f"{ticker}-{year}-Q{quarter}@personal-earnings-calendar"
 
     summary = f"{ticker} Q{quarter} {year} Earnings"
+
     description = (
         f"{company}\\n"
         f"Ticker: {ticker}\\n"
@@ -95,18 +113,22 @@ for event in events:
         f"DTEND;VALUE=DATE:{(date.fromisoformat(earnings_date) + timedelta(days=1)).strftime('%Y%m%d')}",
         f"SUMMARY:{escape(summary)}",
         f"DESCRIPTION:{escape(description)}",
+
         "BEGIN:VALARM",
         "TRIGGER:-P1D",
         "ACTION:DISPLAY",
         f"DESCRIPTION:{escape(summary)} tomorrow",
         "END:VALARM",
+
         "BEGIN:VALARM",
         "TRIGGER:-PT1H",
         "ACTION:DISPLAY",
         f"DESCRIPTION:{escape(summary)} in 1 hour",
         "END:VALARM",
+
         "END:VEVENT",
     ])
+
 
 ics.append("END:VCALENDAR")
 
